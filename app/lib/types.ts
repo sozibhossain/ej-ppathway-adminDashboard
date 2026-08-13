@@ -161,6 +161,7 @@ export interface AdvisorProfile {
   audioMessageUrl?: string;
   introVideoUrl?: string;
   pricing?: AdvisorPricing;
+  pricingOverrideEnabled?: boolean;
   sessionTypes?: AdvisorSessionTypes;
   avgRating?: number;
   ratingsCount?: number;

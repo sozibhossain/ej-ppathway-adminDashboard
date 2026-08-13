@@ -19,6 +19,7 @@ import type {
   AdvisorDaySchedule,
   AdvisorProfile,
   AdvisorScheduleSlot,
+  AdvisorPricing,
   AdminUser,
   Wallet,
   AdvisorMetrics,
@@ -336,6 +337,15 @@ export default function AdvisorDetailsPage({ params }: { params: Promise<{ id: s
               </div>
             </Section>
 
+            {/* ===== Advisor-specific Session Pricing ===== */}
+            <Section title="Advisor Session Pricing">
+              <AdminAdvisorPricing
+                advisorId={id}
+                profile={p}
+                onSaved={load}
+              />
+            </Section>
+
             {/* ===== Availability ===== */}
             <Section title="Availability">
               <AdminAvailabilityCalendar
@@ -428,6 +438,123 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
       <h3 className="text-lg font-semibold text-slate-900 mb-4">{title}</h3>
       {children}
+    </div>
+  );
+}
+
+type CompleteAdvisorPricing = Required<AdvisorPricing>;
+
+const EMPTY_PRICING: CompleteAdvisorPricing = {
+  chatPerMin: 0,
+  callPerMin: 0,
+  videoPerMin: 0,
+};
+
+function pricingFormValues(pricing?: AdvisorPricing | null) {
+  return {
+    chatPerMin: String(Number(pricing?.chatPerMin ?? 0)),
+    callPerMin: String(Number(pricing?.callPerMin ?? 0)),
+    videoPerMin: String(Number(pricing?.videoPerMin ?? 0)),
+  };
+}
+
+function AdminAdvisorPricing({
+  advisorId,
+  profile,
+  onSaved,
+}: {
+  advisorId: string;
+  profile?: AdvisorProfile | null;
+  onSaved: () => Promise<void> | void;
+}) {
+  const toast = useToast();
+  const effective = profile?.pricing || EMPTY_PRICING;
+  const [form, setForm] = useState(() => pricingFormValues(effective));
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setForm(pricingFormValues(effective));
+  }, [effective.chatPerMin, effective.callPerMin, effective.videoPerMin]);
+
+  const updateField = (key: keyof CompleteAdvisorPricing, value: string) => {
+    setForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const savePricing = async () => {
+    const values: CompleteAdvisorPricing = {
+      chatPerMin: Number(form.chatPerMin),
+      callPerMin: Number(form.callPerMin),
+      videoPerMin: Number(form.videoPerMin),
+    };
+    if (
+      Object.values(form).some((value) => value.trim() === "") ||
+      Object.values(values).some((value) => !Number.isFinite(value) || value < 0)
+    ) {
+      toast.error("Enter a zero or positive number for every session rate");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await api.patch(`/admin/advisors/${advisorId}`, { pricing: values });
+      toast.success("Advisor session pricing updated");
+      await onSaved();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to update advisor pricing");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-slate-500">
+        Set this advisor&apos;s credits-per-minute rates for the website, mobile app, and session bookings.
+      </p>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <Input
+          label="Chat credits/min"
+          type="number"
+          min={0}
+          step="0.01"
+          inputMode="decimal"
+          value={form.chatPerMin}
+          onChange={(event) => updateField("chatPerMin", event.target.value)}
+          disabled={saving}
+        />
+        <Input
+          label="Audio call credits/min"
+          type="number"
+          min={0}
+          step="0.01"
+          inputMode="decimal"
+          value={form.callPerMin}
+          onChange={(event) => updateField("callPerMin", event.target.value)}
+          disabled={saving}
+        />
+        <Input
+          label="Video call credits/min"
+          type="number"
+          min={0}
+          step="0.01"
+          inputMode="decimal"
+          value={form.videoPerMin}
+          onChange={(event) => updateField("videoPerMin", event.target.value)}
+          disabled={saving}
+        />
+      </div>
+
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button
+          type="button"
+          onClick={savePricing}
+          loading={saving}
+          disabled={saving}
+        >
+          Save Pricing
+        </Button>
+      </div>
     </div>
   );
 }

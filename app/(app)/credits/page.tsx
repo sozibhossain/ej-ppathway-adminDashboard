@@ -34,11 +34,6 @@ type CreditSettings = {
   signupFreeCredits: number;
   creditExpirationDays: number;
   creditUsdRate: number;
-  advisorCreditPricing: {
-    chatPerMin: number;
-    callPerMin: number;
-    videoPerMin: number;
-  };
   creditPacks: CreditPack[];
   creditUsage: {
     chatTranscript: number;
@@ -131,7 +126,6 @@ export default function CreditManagementPage() {
         signupFreeCredits: settings.signupFreeCredits,
         creditExpirationDays: settings.creditExpirationDays,
         creditUsdRate: settings.creditUsdRate,
-        advisorCreditPricing: settings.advisorCreditPricing,
         creditPacks: settings.creditPacks,
         creditUsageBlocks: settings.creditUsageBlocks,
       });
@@ -195,41 +189,6 @@ export default function CreditManagementPage() {
                   step={0.01}
                   value={String(settings.creditUsdRate)}
                   onChange={(e) => setSettings({ ...settings, creditUsdRate: Number(e.target.value) })}
-                />
-              </div>
-            </section>
-
-            <section className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
-              <div className="mb-4">
-                <h2 className="text-lg font-semibold text-slate-900">Advisor Session Pricing</h2>
-                <p className="text-sm text-slate-500">
-                  Set the global credits-per-minute rate used by every advisor profile on the website and mobile app.
-                </p>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Input
-                  label="Chat credits/min"
-                  type="number"
-                  min={0}
-                  step={0.01}
-                  value={String(settings.advisorCreditPricing.chatPerMin)}
-                  onChange={(e) => setAdvisorPricing(settings, setSettings, "chatPerMin", Number(e.target.value))}
-                />
-                <Input
-                  label="Audio call credits/min"
-                  type="number"
-                  min={0}
-                  step={0.01}
-                  value={String(settings.advisorCreditPricing.callPerMin)}
-                  onChange={(e) => setAdvisorPricing(settings, setSettings, "callPerMin", Number(e.target.value))}
-                />
-                <Input
-                  label="Video call credits/min"
-                  type="number"
-                  min={0}
-                  step={0.01}
-                  value={String(settings.advisorCreditPricing.videoPerMin)}
-                  onChange={(e) => setAdvisorPricing(settings, setSettings, "videoPerMin", Number(e.target.value))}
                 />
               </div>
             </section>
@@ -333,11 +292,6 @@ function withDefaults(data?: Partial<CreditSettings> | null): CreditSettings {
     signupFreeCredits: Number(data?.signupFreeCredits ?? 0),
     creditExpirationDays: Number(data?.creditExpirationDays ?? 60),
     creditUsdRate: Number(data?.creditUsdRate ?? 1),
-    advisorCreditPricing: {
-      chatPerMin: Number(data?.advisorCreditPricing?.chatPerMin ?? 1),
-      callPerMin: Number(data?.advisorCreditPricing?.callPerMin ?? 1),
-      videoPerMin: Number(data?.advisorCreditPricing?.videoPerMin ?? 2),
-    },
     creditPacks: creditPacks.map((pack, index) => ({
       id: pack.id || `credits_${index + 1}`,
       label: pack.label || `${pack.credits || 0} Credits`,
@@ -374,21 +328,6 @@ function patchBlock(settings: CreditSettings, setSettings: (next: CreditSettings
   setSettings({ ...settings, creditUsageBlocks: settings.creditUsageBlocks.map((block, i) => i === index ? { ...block, ...patch } : block) });
 }
 
-function setAdvisorPricing(
-  settings: CreditSettings,
-  setSettings: (next: CreditSettings) => void,
-  key: keyof CreditSettings["advisorCreditPricing"],
-  value: number,
-) {
-  setSettings({
-    ...settings,
-    advisorCreditPricing: {
-      ...settings.advisorCreditPricing,
-      [key]: value,
-    },
-  });
-}
-
 function newPack(index: number): CreditPack {
   return { id: `credits_${Date.now()}`, label: "New Credit Pack", credits: 25, bonusCredits: 0, priceUsd: 19, revenueCatProductId: "", isActive: true, sortOrder: index + 1 };
 }
@@ -400,16 +339,6 @@ function newUsageBlock(index: number): CreditUsageBlock {
 function validate(settings: CreditSettings) {
   if (!Number.isFinite(settings.creditUsdRate) || settings.creditUsdRate <= 0) return "Custom purchase rate must be greater than 0";
   if (!Number.isFinite(settings.creditExpirationDays) || settings.creditExpirationDays <= 0) return "Credit expiration days must be greater than 0";
-  if (
-    !Number.isFinite(settings.advisorCreditPricing.chatPerMin) ||
-    settings.advisorCreditPricing.chatPerMin < 0 ||
-    !Number.isFinite(settings.advisorCreditPricing.callPerMin) ||
-    settings.advisorCreditPricing.callPerMin < 0 ||
-    !Number.isFinite(settings.advisorCreditPricing.videoPerMin) ||
-    settings.advisorCreditPricing.videoPerMin < 0
-  ) {
-    return "Advisor session pricing must be zero or a positive number";
-  }
   if (!settings.creditPacks.length) return "Add at least one credit pack";
   for (const pack of settings.creditPacks) {
     if (!pack.id.trim() || !pack.label.trim() || pack.credits <= 0 || pack.priceUsd < 0 || (pack.bonusCredits || 0) < 0) {
