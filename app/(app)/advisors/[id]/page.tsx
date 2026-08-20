@@ -619,7 +619,14 @@ function AdminAvailabilityCalendar({
     return dedupeSlots(storedSlots.length ? storedSlots : fromToSlot);
   };
   const getDateRule = (key: string): DateAvailabilityRule => {
-    if (hasDateOverride(key)) return dateAvailability[key];
+    if (hasDateOverride(key)) {
+      const rule = dateAvailability[key];
+      const slots = rule.unavailable ? [] : dedupeSlots(rule.slots || []);
+      // Read an override with no windows as a blocked date, matching
+      // setDateRule and the API. Also covers rows saved before that rule
+      // existed, which would otherwise show the toggle on with no slots.
+      return { unavailable: rule.unavailable === true || slots.length === 0, slots };
+    }
     return { unavailable: false, slots: getWeeklySlots(key) };
   };
   const getTimeOffBaseSlots = (key: string) => {
@@ -681,14 +688,17 @@ function AdminAvailabilityCalendar({
   const cells = useMemo(() => calendarCells(viewMonth), [viewMonth]);
 
   const setDateRule = (date: string, rule: DateAvailabilityRule) => {
+    const slots = rule.unavailable ? [] : dedupeSlots(rule.slots || []);
+    // An override with no windows means nothing is bookable that date, so store
+    // it as an explicit block. Left as `{ unavailable: false, slots: [] }` it
+    // reads as "no override" and the weekly schedule silently comes back —
+    // remove the date entirely (Use weekly) to fall back on purpose.
+    const unavailable = rule.unavailable === true || slots.length === 0;
     setAvailability((current) => ({
       ...current,
       dateAvailability: {
         ...current.dateAvailability,
-        [date]: {
-          unavailable: rule.unavailable === true,
-          slots: rule.unavailable ? [] : dedupeSlots(rule.slots || []),
-        },
+        [date]: { unavailable, slots },
       },
     }));
   };
@@ -801,9 +811,17 @@ function AdminAvailabilityCalendar({
   };
 
   const markUnavailable = (unavailable: boolean) => {
+    if (unavailable) {
+      setDateRule(selectedDate, { unavailable: true, slots: [] });
+      return;
+    }
+    // Switching availability back on has to leave at least one window, or
+    // setDateRule would immediately block the date again and the toggle would
+    // appear stuck. Fall back to the weekly plan, then to a fresh slot.
+    const restored = selectedSlots.length ? selectedSlots : selectedWeeklySlots;
     setDateRule(selectedDate, {
-      unavailable,
-      slots: unavailable ? [] : selectedSlots,
+      unavailable: false,
+      slots: restored.length ? restored : [nextSmartSlot([])],
     });
   };
 
