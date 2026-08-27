@@ -650,11 +650,17 @@ export interface PayoutAccountRow {
   advisor: { _id: string; name: string; email?: string; profilePhoto?: string; country?: string };
   account: PayoutAccountInfo;
   availableCredits: number;
+  serviceAvailableUsd: number;
+  tipAvailableUsd: number;
   availableUsd: number;
   pendingCredits: number;
+  servicePendingUsd: number;
+  pendingTipUsd: number;
   pendingUsd: number;
   totalWithdrawnCredits: number;
   totalEarnedCredits: number;
+  totalTipEarnedUsd: number;
+  totalTipWithdrawnUsd: number;
 }
 
 export interface PayoutTransferMethod {
@@ -680,10 +686,16 @@ export interface PayoutAccountDetails {
   transferMethods: PayoutTransferMethod[];
   balance: {
     availableCredits: number;
+    serviceAvailableUsd: number;
+    tipAvailableUsd: number;
     availableUsd: number;
     pendingCredits: number;
+    servicePendingUsd: number;
+    pendingTipUsd: number;
     pendingUsd: number;
     totalWithdrawnCredits: number;
+    totalTipEarnedUsd: number;
+    totalTipWithdrawnUsd: number;
   };
   config: PayoutConfig;
   recentPayouts: PayoutTransaction[];
@@ -692,6 +704,7 @@ export interface PayoutAccountDetails {
 export interface PayoutTransaction extends Transaction {
   amountUsd?: number;
   payoutCredits?: number;
+  payoutTipUsd?: number;
   payoutRateUsd?: number;
   withdrawalStatus?: "requested" | "approved" | "processing" | "paid" | "failed" | "rejected";
   withdrawalFailureReason?: string;
@@ -702,6 +715,7 @@ export interface PayoutTransaction extends Transaction {
 
 export interface PayoutStatAmount {
   credits: number;
+  tipUsd: number;
   usd: number;
   count: number;
 }
@@ -713,7 +727,13 @@ export interface PayoutStats {
   paid: PayoutStatAmount;
   failed: PayoutStatAmount;
   rejected: PayoutStatAmount;
-  payable: { credits: number; usd: number; pendingCredits: number };
+  payable: {
+    credits: number;
+    tipUsd: number;
+    usd: number;
+    pendingCredits: number;
+    pendingTipUsd: number;
+  };
 }
 
 export interface PlanPerformance {

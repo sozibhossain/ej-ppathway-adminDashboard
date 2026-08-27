@@ -207,11 +207,15 @@ function AccountsTab({
                     </td>
                     <td className="px-5 py-3">
                       <div className="font-medium text-emerald-600">{formatCurrency(row.availableUsd)}</div>
-                      <div className="text-xs text-slate-400">{credits(row.availableCredits)}</div>
+                      <div className="text-xs text-slate-400">
+                        Services {formatCurrency(row.serviceAvailableUsd)} · Tips {formatCurrency(row.tipAvailableUsd)}
+                      </div>
                     </td>
                     <td className="px-5 py-3">
                       <div className="text-slate-700">{formatCurrency(row.pendingUsd)}</div>
-                      <div className="text-xs text-slate-400">{credits(row.pendingCredits)}</div>
+                      <div className="text-xs text-slate-400">
+                        Services {formatCurrency(row.servicePendingUsd)} · Tips {formatCurrency(row.pendingTipUsd)}
+                      </div>
                     </td>
                     <td className="px-5 py-3">
                       {row.account.hasMethod ? (
@@ -284,7 +288,7 @@ function ManageAccountModal({
   const [busy, setBusy] = useState<string | null>(null);
 
   // form state
-  const [payCredits, setPayCredits] = useState("");
+  const [payUsd, setPayUsd] = useState("");
   const [note, setNote] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [addressLine1, setAddressLine1] = useState("");
@@ -315,10 +319,6 @@ function ManageAccountModal({
   }, [data?.advisor]);
 
   const rate = data?.config.payoutCreditUsdRate ?? config?.payoutCreditUsdRate ?? 1;
-  const payUsd = useMemo(() => {
-    const c = Number(payCredits);
-    return Number.isFinite(c) && c > 0 ? c * rate : 0;
-  }, [payCredits, rate]);
 
   const run = async (key: string, fn: () => Promise<unknown>, okMsg: string) => {
     setBusy(key);
@@ -347,9 +347,9 @@ function ManageAccountModal({
     run("remove", () => api.delete(`/admin/payouts/accounts/${advisorId}/method`), "Method removed");
 
   const initiatePayout = (processNow: boolean) => {
-    const c = Number(payCredits);
-    if (!Number.isFinite(c) || c <= 0) {
-      toast.error("Enter a credit amount");
+    const usd = Number(payUsd);
+    if (!Number.isFinite(usd) || usd <= 0) {
+      toast.error("Enter a USD payout amount");
       return;
     }
     return run(
@@ -357,13 +357,13 @@ function ManageAccountModal({
       () =>
         api.post("/admin/payouts", {
           advisorId,
-          credits: c,
+          amountUsd: usd,
           note: note || undefined,
           process: processNow,
         }),
       processNow ? "Payout sent" : "Payout queued"
     ).then(() => {
-      setPayCredits("");
+      setPayUsd("");
       setNote("");
     });
   };
@@ -393,7 +393,9 @@ function ManageAccountModal({
             </div>
             <div className="text-right">
               <div className="text-lg font-bold text-emerald-600">{formatCurrency(data.balance.availableUsd)}</div>
-              <div className="text-xs text-slate-400">{credits(data.balance.availableCredits)} available</div>
+              <div className="text-xs text-slate-400">
+                Services {formatCurrency(data.balance.serviceAvailableUsd)} · Net tips {formatCurrency(data.balance.tipAvailableUsd)}
+              </div>
             </div>
           </div>
 
@@ -528,21 +530,22 @@ function ManageAccountModal({
               <div className="rounded-xl border border-[#0a7a90]/30 bg-[#e6f2f6]/40 p-4">
                 <div className="font-semibold text-slate-800 mb-1">Send a payout</div>
                 <div className="text-xs text-slate-500 mb-3">
-                  Converts credits to {data.config.payoutCurrency} at {formatCurrency(rate)} / credit.
+                  Paid in USD. Service earnings convert at {formatCurrency(rate)} per credit; net store tips remain USD.
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Input
-                    label="Credits to pay out"
+                    label="USD to pay out"
                     type="number"
                     min={0}
-                    value={payCredits}
-                    onChange={(e) => setPayCredits(e.target.value)}
-                    placeholder={`min ${data.config.minPayoutCredits}`}
+                    step="0.01"
+                    value={payUsd}
+                    onChange={(e) => setPayUsd(e.target.value)}
+                    placeholder={`min ${formatCurrency(data.config.minPayoutCredits * rate)}`}
                   />
                   <div className="flex items-end">
                     <div className="h-11 flex items-center px-4 rounded-lg bg-white border border-slate-200 w-full">
                       <span className="text-slate-500 text-sm">Payout amount:&nbsp;</span>
-                      <span className="font-semibold text-slate-800">{formatCurrency(payUsd)}</span>
+                      <span className="font-semibold text-slate-800">{formatCurrency(Number(payUsd) || 0)}</span>
                     </div>
                   </div>
                 </div>
@@ -720,7 +723,9 @@ function QueueTab({ q, onChanged }: { q: string; onChanged: () => void }) {
                     </td>
                     <td className="px-5 py-3">
                       <div className="font-medium">{formatCurrency(p.amountUsd)}</div>
-                      <div className="text-xs text-slate-400">{credits(p.payoutCredits ?? p.amount)}</div>
+                      <div className="text-xs text-slate-400">
+                        {credits(p.payoutCredits || 0)} · Tips {formatCurrency(p.payoutTipUsd || 0)}
+                      </div>
                     </td>
                     <td className="px-5 py-3 text-slate-600 capitalize">
                       {(p.withdrawalMethod || "—").replace(/_/g, " ")}
