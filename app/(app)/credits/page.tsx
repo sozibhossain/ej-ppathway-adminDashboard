@@ -21,6 +21,7 @@ type CreditPack = {
   googleProductId?: string;
   isActive?: boolean;
   sortOrder?: number;
+  isDraft?: boolean;
 };
 
 type TipPack = {
@@ -32,6 +33,7 @@ type TipPack = {
   googleProductId?: string;
   isActive?: boolean;
   sortOrder?: number;
+  isDraft?: boolean;
 };
 
 type CreditUsageBlock = {
@@ -117,8 +119,8 @@ type StorePriceSyncJob = {
 };
 
 const DEFAULT_PACKS: CreditPack[] = [
-  { id: "credits_50", label: "50 Credits", credits: 50, bonusCredits: 0, priceUsd: 35, revenueCatProductId: "credits_50", appleProductId: "credits_50", googleProductId: "credits_50", isActive: true, sortOrder: 1 },
-  { id: "credits_100", label: "100 Credits", credits: 100, bonusCredits: 0, priceUsd: 59, revenueCatProductId: "credits_100", appleProductId: "credits_100", googleProductId: "credits_100", isActive: true, sortOrder: 2 },
+  { id: "credits_50", label: "50 Credits", credits: 50, priceUsd: 35, revenueCatProductId: "credits_50", appleProductId: "credits_50", googleProductId: "credits_50", isActive: true, sortOrder: 1 },
+  { id: "credits_100", label: "100 Credits", credits: 100, priceUsd: 59, revenueCatProductId: "credits_100", appleProductId: "credits_100", googleProductId: "credits_100", isActive: true, sortOrder: 2 },
 ];
 
 const DEFAULT_TIP_PACKS: TipPack[] = [
@@ -161,7 +163,8 @@ export default function CreditManagementPage() {
         api.get<StoreSyncStatus>("/admin/settings/credits/store-sync-status"),
         api.get<StorePriceSyncJob[]>("/admin/settings/credits/store-price-syncs"),
       ]);
-      setSettings(withDefaults(settingsRes.data));
+      const loadedSettings = withDefaults(settingsRes.data);
+      setSettings(loadedSettings);
       setSummary(summaryRes.data || null);
       setStoreSyncStatus(storeStatusRes.data || null);
       setStorePriceSyncs(syncsRes.data || []);
@@ -205,8 +208,8 @@ export default function CreditManagementPage() {
         signupFreeCredits: settings.signupFreeCredits,
         creditExpirationDays: settings.creditExpirationDays,
         creditUsdRate: settings.creditUsdRate,
-        creditPacks: settings.creditPacks,
-        tipPacks: settings.tipPacks,
+        creditPacks: settings.creditPacks.map(toCreditPackPayload),
+        tipPacks: settings.tipPacks.map(omitDraftFlag),
         creditUsageBlocks: settings.creditUsageBlocks,
       });
       setSettings(withDefaults(res.data));
@@ -355,16 +358,17 @@ export default function CreditManagementPage() {
                 Enter an Apple-supported USD price point, then start a coordinated update. Apple is monitored first; Google updates only after Apple’s US price is confirmed.
               </div>
               <div className="space-y-3">
-                {settings.creditPacks.map((pack, index) => (
+                {settings.creditPacks.map((pack, index) => {
+                  const identityLocked = pack.isDraft !== true;
+                  return (
                   <div key={`${pack.id}-${index}`} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 rounded-lg border border-slate-100 p-3">
-                    <Input label="ID" value={pack.id} onChange={(e) => patchPack(settings, setSettings, index, { id: e.target.value })} />
+                    <Input label="ID" value={pack.id} disabled={identityLocked} title={identityLocked ? "ID is locked after the pack is saved" : undefined} onChange={(e) => patchPack(settings, setSettings, index, { id: e.target.value })} />
                     <Input label="Label" value={pack.label} onChange={(e) => patchPack(settings, setSettings, index, { label: e.target.value })} />
                     <Input label="Credits" type="number" min={1} value={String(pack.credits)} onChange={(e) => patchPack(settings, setSettings, index, { credits: Number(e.target.value) })} />
-                    <Input label="Bonus" type="number" min={0} value={String(pack.bonusCredits || 0)} onChange={(e) => patchPack(settings, setSettings, index, { bonusCredits: Number(e.target.value) })} />
                     <Input label="Reference USD" type="number" min={0} step={0.01} value={String(pack.priceUsd)} onChange={(e) => patchPack(settings, setSettings, index, { priceUsd: Number(e.target.value) })} />
-                    <Input label="RevenueCat fallback ID" value={pack.revenueCatProductId || ""} onChange={(e) => patchPack(settings, setSettings, index, { revenueCatProductId: e.target.value })} />
-                    <Input label="Apple product ID" value={pack.appleProductId || ""} onChange={(e) => patchPack(settings, setSettings, index, { appleProductId: e.target.value })} />
-                    <Input label="Google product ID" value={pack.googleProductId || ""} onChange={(e) => patchPack(settings, setSettings, index, { googleProductId: e.target.value })} />
+                    <Input label="RevenueCat fallback ID" value={pack.revenueCatProductId || ""} disabled={identityLocked} title={identityLocked ? "RevenueCat product mapping is locked after the pack is saved" : undefined} onChange={(e) => patchPack(settings, setSettings, index, { revenueCatProductId: e.target.value })} />
+                    <Input label="Apple product ID" value={pack.appleProductId || ""} disabled={identityLocked} title={identityLocked ? "Apple product mapping is locked after the pack is saved" : undefined} onChange={(e) => patchPack(settings, setSettings, index, { appleProductId: e.target.value })} />
+                    <Input label="Google product ID" value={pack.googleProductId || ""} disabled={identityLocked} title={identityLocked ? "Google product mapping is locked after the pack is saved" : undefined} onChange={(e) => patchPack(settings, setSettings, index, { googleProductId: e.target.value })} />
                     <label className="flex items-end gap-2 text-sm text-slate-700 pb-2">
                       <input type="checkbox" checked={pack.isActive !== false} onChange={(e) => patchPack(settings, setSettings, index, { isActive: e.target.checked })} />
                       Active
@@ -379,7 +383,8 @@ export default function CreditManagementPage() {
                         variant="success"
                         onClick={() => prepareStorePriceSync(pack)}
                         loading={syncingPackId === pack.id}
-                        disabled={syncingPackId !== null || pack.isActive === false || storePriceSyncs.some((sync) => sync.packId === pack.id && sync.active)}
+                        disabled={pack.isDraft === true || syncingPackId !== null || pack.isActive === false || storePriceSyncs.some((sync) => sync.packId === pack.id && sync.active)}
+                        title={pack.isDraft === true ? "Save this pack before starting a coordinated update" : undefined}
                       >
                         Start Coordinated Update
                       </Button>
@@ -391,7 +396,8 @@ export default function CreditManagementPage() {
                       ) : null}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </section>
 
@@ -409,14 +415,16 @@ export default function CreditManagementPage() {
                 Enter an Apple-supported USD price point, then start a coordinated update. Apple is monitored first; Google updates only after Apple’s US price is confirmed.
               </div>
               <div className="space-y-3">
-                {settings.tipPacks.map((pack, index) => (
+                {settings.tipPacks.map((pack, index) => {
+                  const identityLocked = pack.isDraft !== true;
+                  return (
                   <div key={`${pack.id}-${index}`} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 rounded-lg border border-slate-100 p-3">
-                    <Input label="ID" value={pack.id} onChange={(e) => patchTipPack(settings, setSettings, index, { id: e.target.value })} />
+                    <Input label="ID" value={pack.id} disabled={identityLocked} title={identityLocked ? "ID is locked after the tip package is saved" : undefined} onChange={(e) => patchTipPack(settings, setSettings, index, { id: e.target.value })} />
                     <Input label="Label" value={pack.label} onChange={(e) => patchTipPack(settings, setSettings, index, { label: e.target.value })} />
                     <Input label="Amount (USD)" type="number" min={0.01} step={0.01} value={String(pack.amountUsd)} onChange={(e) => patchTipPack(settings, setSettings, index, { amountUsd: Number(e.target.value) })} />
-                    <Input label="RevenueCat fallback ID" value={pack.revenueCatProductId || ""} onChange={(e) => patchTipPack(settings, setSettings, index, { revenueCatProductId: e.target.value })} />
-                    <Input label="Apple product ID" value={pack.appleProductId || ""} onChange={(e) => patchTipPack(settings, setSettings, index, { appleProductId: e.target.value })} />
-                    <Input label="Google product ID" value={pack.googleProductId || ""} onChange={(e) => patchTipPack(settings, setSettings, index, { googleProductId: e.target.value })} />
+                    <Input label="RevenueCat fallback ID" value={pack.revenueCatProductId || ""} disabled={identityLocked} title={identityLocked ? "RevenueCat product mapping is locked after the tip package is saved" : undefined} onChange={(e) => patchTipPack(settings, setSettings, index, { revenueCatProductId: e.target.value })} />
+                    <Input label="Apple product ID" value={pack.appleProductId || ""} disabled={identityLocked} title={identityLocked ? "Apple product mapping is locked after the tip package is saved" : undefined} onChange={(e) => patchTipPack(settings, setSettings, index, { appleProductId: e.target.value })} />
+                    <Input label="Google product ID" value={pack.googleProductId || ""} disabled={identityLocked} title={identityLocked ? "Google product mapping is locked after the tip package is saved" : undefined} onChange={(e) => patchTipPack(settings, setSettings, index, { googleProductId: e.target.value })} />
                     <label className="flex items-end gap-2 text-sm text-slate-700 pb-2">
                       <input type="checkbox" checked={pack.isActive !== false} onChange={(e) => patchTipPack(settings, setSettings, index, { isActive: e.target.checked })} />
                       Active
@@ -431,7 +439,8 @@ export default function CreditManagementPage() {
                         variant="success"
                         onClick={() => prepareStorePriceSync(pack)}
                         loading={syncingPackId === pack.id}
-                        disabled={syncingPackId !== null || pack.isActive === false || storePriceSyncs.some((sync) => sync.packId === pack.id && sync.active)}
+                        disabled={pack.isDraft === true || syncingPackId !== null || pack.isActive === false || storePriceSyncs.some((sync) => sync.packId === pack.id && sync.active)}
+                        title={pack.isDraft === true ? "Save this tip package before starting a coordinated update" : undefined}
                       >
                         Start Coordinated Update
                       </Button>
@@ -443,7 +452,8 @@ export default function CreditManagementPage() {
                       ) : null}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </section>
 
@@ -697,7 +707,7 @@ function withDefaults(data?: Partial<CreditSettings> | null): CreditSettings {
       id: pack.id || `credits_${index + 1}`,
       label: pack.label || `${pack.credits || 0} Credits`,
       credits: Number(pack.credits || 0),
-      bonusCredits: Number(pack.bonusCredits || 0),
+      bonusCredits: 0,
       priceUsd: Number(pack.priceUsd || 0),
       revenueCatProductId: pack.revenueCatProductId || pack.id || "",
       appleProductId: pack.appleProductId || pack.revenueCatProductId || pack.id || "",
@@ -746,11 +756,21 @@ function patchBlock(settings: CreditSettings, setSettings: (next: CreditSettings
 }
 
 function newPack(index: number): CreditPack {
-  return { id: `credits_${Date.now()}`, label: "New Credit Pack", credits: 25, bonusCredits: 0, priceUsd: 19, revenueCatProductId: "", appleProductId: "", googleProductId: "", isActive: true, sortOrder: index + 1 };
+  return { id: `credits_${Date.now()}`, label: "New Credit Pack", credits: 25, priceUsd: 19, revenueCatProductId: "", appleProductId: "", googleProductId: "", isActive: true, sortOrder: index + 1, isDraft: true };
 }
 
 function newTipPack(index: number): TipPack {
-  return { id: `tip_${Date.now()}`, label: "New Advisor Tip", amountUsd: 15, revenueCatProductId: "", appleProductId: "", googleProductId: "", isActive: true, sortOrder: index + 1 };
+  return { id: `tip_${Date.now()}`, label: "New Advisor Tip", amountUsd: 15, revenueCatProductId: "", appleProductId: "", googleProductId: "", isActive: true, sortOrder: index + 1, isDraft: true };
+}
+
+function omitDraftFlag<T extends { isDraft?: boolean }>(item: T): Omit<T, "isDraft"> {
+  const copy = { ...item };
+  delete copy.isDraft;
+  return copy;
+}
+
+function toCreditPackPayload(pack: CreditPack): Omit<CreditPack, "isDraft"> {
+  return { ...omitDraftFlag(pack), bonusCredits: 0 };
 }
 
 function newUsageBlock(index: number): CreditUsageBlock {
@@ -762,8 +782,8 @@ function validate(settings: CreditSettings) {
   if (!Number.isFinite(settings.creditExpirationDays) || settings.creditExpirationDays <= 0) return "Credit expiration days must be greater than 0";
   if (!settings.creditPacks.length) return "Add at least one credit pack";
   for (const pack of settings.creditPacks) {
-    if (!pack.id.trim() || !pack.label.trim() || pack.credits <= 0 || pack.priceUsd < 0 || (pack.bonusCredits || 0) < 0) {
-      return "Each pack needs ID, label, positive credits, non-negative bonus, and non-negative price";
+    if (!pack.id.trim() || !pack.label.trim() || pack.credits <= 0 || pack.priceUsd < 0) {
+      return "Each pack needs ID, label, positive credits, and non-negative price";
     }
     if (pack.isActive !== false && (!pack.appleProductId?.trim() || !pack.googleProductId?.trim())) {
       return "Each active pack needs both Apple and Google product IDs";
